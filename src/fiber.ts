@@ -21,7 +21,9 @@ interface ReactFiber {
   return?: ReactFiber | null;
   child?: ReactFiber | null;
   sibling?: ReactFiber | null;
-  stateNode?: { current?: ReactFiber };
+  /** `{ current: Fiber }` on the HostRoot fiber; the DOM `Element` itself on
+   * a host component fiber (tag 5) — shape depends on `tag`, hence `unknown`. */
+  stateNode?: unknown;
   tag?: number;
   type: unknown;
   memoizedProps?: unknown;
@@ -97,6 +99,14 @@ export interface InspectedEntry {
   props: unknown;
   /** null = resolved to nothing app-owned (library code); undefined = pending */
   location?: ResolvedLocation | null;
+  /**
+   * DOM element to highlight for this entry — the inspected element itself
+   * for the host entry, or the nearest host descendant this component
+   * actually renders for a component entry. `null` when nothing renders to
+   * the DOM (e.g. a Server Component with no client fiber, or a component
+   * whose only output was removed).
+   */
+  element?: Element | null;
 }
 
 const MAX_OWNER_DEPTH = 32;
@@ -120,7 +130,7 @@ export function currentFiber(fiber: ReactFiber): ReactFiber | null {
   for (let depth = 0; depth < 1000; depth++) {
     const parentA = a.return;
     if (!parentA) return a.tag === 3
-      ? (a.stateNode?.current === a ? fiber : alternate) : null;
+      ? ((a.stateNode as { current?: ReactFiber } | null)?.current === a ? fiber : alternate) : null;
     const parentB = parentA.alternate;
     if (!parentB) {
       if (!parentA.return) return null;
@@ -165,6 +175,40 @@ export function getFiberFromNode(node: Node | null): ReactFiber | null {
       return currentFiber((el as unknown as Record<string, ReactFiber>)[key]);
     }
     el = el.parentElement;
+  }
+  return null;
+}
+
+// A full subtree visit, not a depth cap — hovering a high ancestor (e.g.
+// the whole page layout) can legitimately have a large fiber subtree
+// before hitting its first host node.
+const MAX_HOST_SEARCH_NODES = 5000;
+
+/**
+ * A component fiber has no DOM node of its own — only host fibers (tag 5)
+ * do. To highlight a component's rendered footprint (e.g. hovering an
+ * ancestor in the Source chain), search its subtree for the first host
+ * descendant it actually renders, in document order.
+ *
+ * This has to be a full pre-order walk (child *and* sibling), not a
+ * straight descent through `.child` — e.g. Emotion's `styled()` (which MUI
+ * builds on) renders a `<Fragment><Insertion/><StyledHost/></Fragment>`
+ * internally: `Insertion` is a real first child that renders `null` for a
+ * CSS side effect, so `.child` alone dead-ends there and never reaches the
+ * actual host element sitting right next to it as a sibling.
+ */
+export function nearestHostElement(
+  fiber: ReactFiber | null | undefined
+): Element | null {
+  const siblingStack: ReactFiber[] = [];
+  let node: ReactFiber | null | undefined = fiber;
+  let visited = 0;
+  while (node && visited++ < MAX_HOST_SEARCH_NODES) {
+    if (typeof node.type === "string" && node.stateNode instanceof Element) {
+      return node.stateNode;
+    }
+    if (node.sibling) siblingStack.push(node.sibling);
+    node = node.child ?? siblingStack.pop() ?? null;
   }
   return null;
 }
@@ -302,6 +346,7 @@ export function buildInspectChain(el: Element): InspectedEntry[] {
       stackFrames: hostFrames,
       props: fiber.memoizedProps,
       location: debugSourceLocation(fiber._debugSource),
+      element: el,
     },
   ];
 
@@ -322,6 +367,9 @@ export function buildInspectChain(el: Element): InspectedEntry[] {
           kind: "component",
           stackFrames: getComponentInfoFrames(info),
           props: info.props,
+          // Server Components have no client fiber, so no DOM element to
+          // point to independent of the host boundary above.
+          element: null,
         });
       }
       info = info.owner;
@@ -352,6 +400,7 @@ export function buildInspectChain(el: Element): InspectedEntry[] {
       stackFrames: getStackFrames(owner),
       props: owner.memoizedProps,
       location: debugSourceLocation(owner._debugSource),
+      element: nearestHostElement(owner),
     });
     owner = owner._debugOwner;
   }
@@ -392,6 +441,7 @@ export function buildRenderChain(el: Element): InspectedEntry[] {
       stackFrames: getStackFrames(fiber),
       props: fiber.memoizedProps,
       location: debugSourceLocation(fiber._debugSource),
+      element: el,
     },
   ];
 
@@ -412,6 +462,7 @@ export function buildRenderChain(el: Element): InspectedEntry[] {
           kind: "component",
           stackFrames: getComponentInfoFrames(info),
           props: info.props,
+          element: null,
         });
       }
       info = info.owner;
@@ -443,6 +494,7 @@ export function buildRenderChain(el: Element): InspectedEntry[] {
         stackFrames: getStackFrames(resolved),
         props: resolved.memoizedProps,
         location: debugSourceLocation(resolved._debugSource),
+        element: nearestHostElement(resolved),
       });
     }
     current = resolved.return;

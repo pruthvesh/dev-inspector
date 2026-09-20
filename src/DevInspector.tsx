@@ -878,7 +878,7 @@ function DevInspectorInner({
               resolverOptions={resolverOptions} />}
             {locked && <>
             {tab === "source" && (
-              <>
+              <div onMouseLeave={() => setPreview(null)}>
                 {locked.className && (
                   <div
                     style={{
@@ -948,6 +948,20 @@ function DevInspectorInner({
                         openInEditor(entry.location, resolverOptions)
                       }
                       title={entry.location ? "Open in editor" : undefined}
+                      onMouseEnter={() => {
+                        const target = entry.element;
+                        setPreview(
+                          target && target.isConnected
+                            ? {
+                                el: target,
+                                rect: target.getBoundingClientRect(),
+                                box: getBoxModel(target),
+                                name: entry.name,
+                                locationLabel: null,
+                              }
+                            : null
+                        );
+                      }}
                       style={{
                         display: "flex",
                         alignItems: "baseline",
@@ -1044,7 +1058,7 @@ function DevInspectorInner({
                     ))}
                   </div>
                 )}
-              </>
+              </div>
             )}
 
             {tab === "props" && (
