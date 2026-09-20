@@ -33,7 +33,7 @@ import {
 } from "./fiber";
 import { JsonTree } from "./JsonTree";
 import { PropsPanel } from "./PropsPanel";
-import { ComponentBrowser } from "./ComponentBrowser";
+import { ComponentBrowser, indentFor } from "./ComponentBrowser";
 import { InspectorPanel } from "./InspectorPanel";
 import { buildAiContext } from "./aiContext";
 import type { FlashEvent } from "./flasher";
@@ -416,12 +416,24 @@ function DevInspectorInner({
   const [flashes, setFlashes] = useState<FlashRecord[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [browserOpen, setBrowserOpen] = useState(false);
+  const [sourceOnlyFound, setSourceOnlyFound] = useState(false);
   const [preview, setPreview] = useState<HoverState | null>(null);
 
   const parsedHotkey = useMemo(() => parseHotkey(hotkey), [hotkey]);
   const resolverOptions = useMemo<ResolverOptions>(
     () => ({ editorEndpoint, stackFramesEndpoint, editor, projectRoot }),
     [editorEndpoint, stackFramesEndpoint, editor, projectRoot]
+  );
+  // `location === null` means resolved-but-nothing-app-owned; `undefined`
+  // means still resolving. Only filter out the confirmed-absent ones, same
+  // as the Tree view's "Only app components", so entries don't disappear
+  // the instant the checkbox is checked and then pop back once resolved.
+  const sourceEntries = useMemo(
+    () =>
+      (locked?.entries ?? [])
+        .map((entry, index) => ({ entry, index }))
+        .filter(({ entry }) => !sourceOnlyFound || entry.location !== null),
+    [locked, sourceOnlyFound]
   );
 
   const activeRef = useRef(active);
@@ -887,7 +899,39 @@ function DevInspectorInner({
                     <CopyButton text={locked.className} label="Copy class list" />
                   </div>
                 )}
-                {locked.entries.map((entry, index) => {
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "flex-end",
+                    padding: "5px 12px",
+                    borderBottom: "1px solid #27272a",
+                  }}
+                >
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                      color: "#a1a1aa",
+                      fontSize: 12,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={sourceOnlyFound}
+                      onChange={(e) => setSourceOnlyFound(e.target.checked)}
+                    />
+                    Only app components
+                  </label>
+                </div>
+                {sourceOnlyFound && !sourceEntries.length && (
+                  <div style={{ padding: "5px 12px", color: "#a1a1aa" }}>
+                    No components with a known source location.
+                  </div>
+                )}
+                {sourceEntries.map(({ entry, index }, displayIndex) => {
                   const loc = locationText(entry);
                   const pending = entry.location === undefined;
                   return (
@@ -904,6 +948,7 @@ function DevInspectorInner({
                         alignItems: "baseline",
                         gap: 8,
                         padding: "5px 12px",
+                        paddingLeft: 12 + indentFor(displayIndex),
                         cursor: entry.location ? "pointer" : "default",
                         background:
                           index === selectedIdx
