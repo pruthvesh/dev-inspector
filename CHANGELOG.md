@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.2 — 2026-09-20
+
+- Fix the Tree view's row indentation, which capped at 10 levels deep and
+  made every deeper row line up at the same x position — reading as a
+  flattened hierarchy on apps with many nested providers, even though the
+  underlying tree was already correct. Indentation now keeps growing
+  (tapering its per-level step past depth 10), and the panel scrolls
+  horizontally so rows wider than it stay fully readable.
+
 ## 0.7.1 — 2026-09-20
 
 - Fix the Tree view's render-chain walk to resolve every ancestor through
