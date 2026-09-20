@@ -1,4 +1,4 @@
-import { buildInspectChain, type InspectedEntry } from "./fiber";
+import { buildRenderChain, type InspectedEntry } from "./fiber";
 
 export interface ComponentNode {
   identity: object;
@@ -29,7 +29,7 @@ export function scanComponents(root: Element): {
     }
     if (!element.closest("[data-dev-inspector-ui]")) {
       try {
-        const chain = buildInspectChain(element)
+        const chain = buildRenderChain(element)
           .filter((entry) => entry.kind === "component")
           .reverse();
         let parent: ComponentNode | undefined;

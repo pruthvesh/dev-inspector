@@ -51,6 +51,42 @@ describe("component index", () => {
       act(() => root.unmount());
     }
   });
+  it("nests by actual render tree, not JSX ownership", () => {
+    // Container's own JSX is authored by App, same as Item's — so an
+    // owner-chain walk would put both Item instances directly under App,
+    // skipping Container even though Container is their real render parent
+    // (it renders `{children}`, a very common layout/grid/provider shape).
+    function Item() {
+      return createElement("span", null, "hi");
+    }
+    function Container({ children }: { children?: unknown }) {
+      return createElement("section", null, children as never);
+    }
+    function App() {
+      return createElement(
+        Container,
+        null,
+        createElement(Item),
+        createElement(Item),
+      );
+    }
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    try {
+      act(() => root.render(createElement(App)));
+      const tree = scanComponents(document.body);
+      expect(tree.roots.map((node) => node.entry.name)).toEqual(["App"]);
+      expect(tree.roots[0].children.map((node) => node.entry.name)).toEqual([
+        "Container",
+      ]);
+      expect(
+        tree.roots[0].children[0].children.map((node) => node.entry.name),
+      ).toEqual(["Item", "Item"]);
+    } finally {
+      act(() => root.unmount());
+    }
+  });
   it("excludes inspector UI and bounds work on large pages", () => {
     function OwnUi() {
       return createElement("button", null, "Inspector");

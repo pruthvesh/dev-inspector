@@ -358,6 +358,91 @@ export function buildInspectChain(el: Element): InspectedEntry[] {
   return entries;
 }
 
+const MAX_RENDER_DEPTH = 200;
+
+/** Host tags and unnamed internals (Fragment, Context.Provider/Consumer,
+ * Suspense, …) don't get a tree node; named function/class/forwardRef/memo
+ * components do. */
+function renderAncestorName(type: unknown): string | null {
+  if (typeof type === "string") return null;
+  if (typeof type === "function") return getDisplayName(type) ?? "Anonymous";
+  return getDisplayName(type);
+}
+
+/**
+ * Builds the *actual* component nesting for `el` by walking committed
+ * `fiber.return` links, unlike `buildInspectChain`'s `_debugOwner` walk
+ * (who authored this JSX — right for jump-to-source, but not the same as
+ * who actually renders whom). A component that only renders
+ * `{props.children}` — very common in layout/grid/provider wrappers — has
+ * no distinguishing owner of its own, so the owner chain skips straight to
+ * whoever wrote that JSX and flattens the real nesting. Walking `.return`
+ * instead keeps every real ancestor, matching what the Tree view should
+ * show.
+ */
+export function buildRenderChain(el: Element): InspectedEntry[] {
+  const fiber = getFiberFromNode(el);
+  if (!fiber) return [];
+
+  const entries: InspectedEntry[] = [
+    {
+      name: describeHost(fiber, el),
+      identity: inspectionIdentity(fiber),
+      kind: "host",
+      stackFrames: getStackFrames(fiber),
+      props: fiber.memoizedProps,
+      location: debugSourceLocation(fiber._debugSource),
+    },
+  ];
+
+  // Server Components have no client fiber; `_debugInfo` on the boundary
+  // fiber is the only ancestry React exposes for them, so this part still
+  // has to go through owner-style info rather than `.return`.
+  const debugInfo = fiber._debugInfo;
+  const seenComponentInfo = new Set<ReactComponentInfo>();
+  const appendComponentInfo = (start: ReactComponentInfo) => {
+    let info: ReactComponentInfo | null | undefined = start;
+    let depth = 0;
+    while (info && depth++ < MAX_OWNER_DEPTH && !seenComponentInfo.has(info)) {
+      seenComponentInfo.add(info);
+      if (typeof info.name === "string") {
+        entries.push({
+          name: info.name,
+          identity: inspectionIdentity(info),
+          kind: "component",
+          stackFrames: getComponentInfoFrames(info),
+          props: info.props,
+        });
+      }
+      info = info.owner;
+    }
+  };
+  if (Array.isArray(debugInfo)) {
+    for (let i = debugInfo.length - 1; i >= 0; i--) {
+      const info = debugInfo[i];
+      if (isComponentInfo(info)) appendComponentInfo(info);
+    }
+  }
+
+  let current = fiber.return;
+  let depth = 0;
+  while (current && depth++ < MAX_RENDER_DEPTH) {
+    const name = renderAncestorName(current.type);
+    if (name) {
+      entries.push({
+        name,
+        identity: inspectionIdentity(current),
+        kind: "component",
+        stackFrames: getStackFrames(current),
+        props: current.memoizedProps,
+        location: debugSourceLocation(current._debugSource),
+      });
+    }
+    current = current.return;
+  }
+  return entries;
+}
+
 interface SourceInfo {
   display: string;
   editorFile: string;

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  buildInspectChain,
+  buildRenderChain,
   openInEditor,
   resolveLocation,
   type ResolvedLocation,
@@ -33,6 +33,27 @@ const sourceLinkStyle: React.CSSProperties = {
   marginLeft: "auto",
 };
 
+/**
+ * Drops nodes whose source resolved to nothing app-owned (library/generated
+ * code, e.g. MUI's `MuiStackRoot`), reattaching their children to the
+ * nearest surviving ancestor instead of losing them. A node with no
+ * resolved location yet (`locations` has no entry for it) is kept as-is —
+ * pruning only removes *confirmed* no-source nodes so the tree doesn't
+ * collapse to empty the instant the filter is switched on.
+ */
+export function pruneToFound(
+  nodes: ComponentNode[],
+  locations: Map<object, ResolvedLocation | null>,
+): ComponentNode[] {
+  const result: ComponentNode[] = [];
+  for (const node of nodes) {
+    const children = pruneToFound(node.children, locations);
+    if (locations.get(node.identity) === null) result.push(...children);
+    else result.push({ ...node, children });
+  }
+  return result;
+}
+
 export function ComponentBrowser({
   onSelect,
   onPreview,
@@ -47,6 +68,7 @@ export function ComponentBrowser({
   const [collapsed, setCollapsed] = useState<Set<object>>(new Set());
   const [selected, setSelected] = useState<object | null>(null);
   const [message, setMessage] = useState("");
+  const [showOnlyFound, setShowOnlyFound] = useState(false);
   useEffect(() => () => onPreview(null), []);
 
   // Resolving a source location can mean a network round-trip, and the tree
@@ -57,6 +79,42 @@ export function ComponentBrowser({
   const nodeByElRef = useRef<Map<Element, ComponentNode>>(new Map());
   const resolverOptionsRef = useRef(resolverOptions);
   resolverOptionsRef.current = resolverOptions;
+
+  // Resolutions land as a burst of separately-timed promises (one per node,
+  // scrolled-into-view or — with the "only app components" filter — the
+  // whole tree at once). Coalescing them into one state update per frame
+  // keeps a large tree from re-rendering hundreds of times in a row.
+  const pendingLocationsRef = useRef<Map<object, ResolvedLocation | null>>(new Map());
+  const flushScheduledRef = useRef(false);
+  const flushLocations = () => {
+    flushScheduledRef.current = false;
+    if (pendingLocationsRef.current.size === 0) return;
+    const batch = pendingLocationsRef.current;
+    pendingLocationsRef.current = new Map();
+    setLocations((prev) => {
+      const next = new Map(prev);
+      for (const [identity, location] of batch) next.set(identity, location);
+      return next;
+    });
+  };
+  const scheduleLocation = (node: ComponentNode) => {
+    if (startedRef.current.has(node.identity)) return;
+    startedRef.current.add(node.identity);
+    resolveLocation(node.entry.stackFrames, resolverOptionsRef.current).then(
+      (location) => {
+        pendingLocationsRef.current.set(node.identity, location);
+        if (!flushScheduledRef.current) {
+          flushScheduledRef.current = true;
+          if (typeof requestAnimationFrame !== "undefined") {
+            requestAnimationFrame(flushLocations);
+          } else {
+            setTimeout(flushLocations, 16);
+          }
+        }
+      },
+    );
+  };
+
   const observerRef = useRef<IntersectionObserver | null>(null);
   if (!observerRef.current && typeof IntersectionObserver !== "undefined") {
     observerRef.current = new IntersectionObserver(
@@ -66,13 +124,7 @@ export function ComponentBrowser({
           const target = observedEntry.target;
           observerRef.current?.unobserve(target);
           const node = nodeByElRef.current.get(target);
-          if (!node || startedRef.current.has(node.identity)) continue;
-          startedRef.current.add(node.identity);
-          resolveLocation(node.entry.stackFrames, resolverOptionsRef.current).then(
-            (location) => {
-              setLocations((prev) => new Map(prev).set(node.identity, location));
-            },
-          );
+          if (node) scheduleLocation(node);
         }
       },
       { rootMargin: "200px" },
@@ -90,7 +142,22 @@ export function ComponentBrowser({
       observer.observe(el);
     }
   };
-  const all = useMemo(() => flattenComponents(tree.roots), [tree]);
+  const everyNode = useMemo(() => flattenComponents(tree.roots), [tree]);
+  // The "only app components" filter needs every node's location, not just
+  // the ones scrolled into view — so switching it on resolves the whole
+  // tree up front instead of waiting on IntersectionObserver.
+  useEffect(() => {
+    if (!showOnlyFound) return;
+    for (const node of everyNode) scheduleLocation(node);
+  }, [showOnlyFound, everyNode]);
+  const displayRoots = useMemo(
+    () => (showOnlyFound ? pruneToFound(tree.roots, locations) : tree.roots),
+    [tree, showOnlyFound, locations],
+  );
+  const pendingCount = showOnlyFound
+    ? everyNode.filter((node) => !locations.has(node.identity)).length
+    : 0;
+  const all = useMemo(() => flattenComponents(displayRoots), [displayRoots]);
   const matches = useMemo(
     () =>
       all.filter((node) =>
@@ -107,12 +174,12 @@ export function ComponentBrowser({
     }
   };
   if (searching) rows.push(...matches.map((node) => ({ node, depth: 0 })));
-  else append(tree.roots, 0);
+  else append(displayRoots, 0);
 
   const choose = (node: ComponentNode) => {
     if (
       !node.element.isConnected ||
-      !buildInspectChain(node.element).some(
+      !buildRenderChain(node.element).some(
         (entry) => entry.identity === node.identity,
       )
     ) {
@@ -185,7 +252,28 @@ export function ComponentBrowser({
           {searching
             ? `${matches.length} matches${matches.some((node) => node.identity === selected) ? ` · ${matches.findIndex((node) => node.identity === selected) + 1} of ${matches.length}` : ""}`
             : `${all.length} components`}
+          {showOnlyFound && pendingCount > 0
+            ? ` · checking ${pendingCount} more…`
+            : ""}
         </span>
+        <label
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+            color: "#a1a1aa",
+            fontSize: 12,
+            cursor: "pointer",
+            flexShrink: 0,
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={showOnlyFound}
+            onChange={(event) => setShowOnlyFound(event.target.checked)}
+          />
+          Only app components
+        </label>
         {searching && (
           <>
             <button
@@ -221,7 +309,11 @@ export function ComponentBrowser({
         <div>
           {searching
             ? "No matching components."
-            : "No components with rendered elements found."}
+            : showOnlyFound && pendingCount > 0
+              ? "Checking components for source…"
+              : showOnlyFound
+                ? "No components with a known source location."
+                : "No components with rendered elements found."}
         </div>
       )}
       <div
