@@ -848,7 +848,7 @@ function DevInspectorInner({
             </button>
           </div>
 
-          <div style={{ overflowY: "auto", minHeight: 0, flex: 1, padding: "4px 0" }}>
+          <div style={{ overflowY: "auto", overflowX: "auto", minHeight: 0, flex: 1, padding: "4px 0" }}>
             {tab === "tree" && <ComponentBrowser
               onSelect={node => {
                 node.element.scrollIntoView?.({ block: "center", inline: "nearest" });

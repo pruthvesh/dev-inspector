@@ -34,6 +34,28 @@ const sourceLinkStyle: React.CSSProperties = {
 };
 
 /**
+ * Real apps can easily nest 15-30+ component levels deep before reaching
+ * app code (context providers especially — theme, i18n, auth, data, state
+ * management, and the framework's own routing boundaries each add a
+ * layer). A hard indentation cap made every row past that point line up
+ * at the same x position, reading as a flattened hierarchy even though
+ * the underlying tree (and `aria-level`) was already correct. Taper the
+ * per-level step instead of capping it outright, and keep growing
+ * indefinitely (however slowly) rather than clamping to a max — depth
+ * should never stop reading visually, it should just take a horizontal
+ * scroll (see the tree's `overflowX` in DevInspector.tsx) to see the
+ * deepest rows in full.
+ */
+export function indentFor(depth: number): number {
+  const FULL_STEP = 12;
+  const FULL_STEP_DEPTH = 10;
+  const TAPERED_STEP = 4;
+  const base = Math.min(depth, FULL_STEP_DEPTH) * FULL_STEP;
+  const tapered = Math.max(0, depth - FULL_STEP_DEPTH) * TAPERED_STEP;
+  return base + tapered;
+}
+
+/**
  * Drops nodes whose source resolved to nothing app-owned (library/generated
  * code, e.g. MUI's `MuiStackRoot`), reattaching their children to the
  * nearest surviving ancestor instead of losing them. A node with no
@@ -367,7 +389,7 @@ export function ComponentBrowser({
             style={{
               display: "flex",
               alignItems: "center",
-              paddingLeft: Math.min(depth * 12, 120),
+              paddingLeft: indentFor(depth),
               background: selected === node.identity ? "#312e81" : undefined,
               borderRadius: 4,
             }}
@@ -398,7 +420,8 @@ export function ComponentBrowser({
                 background: "none",
                 textAlign: "left",
                 cursor: "pointer",
-                overflowWrap: "anywhere",
+                whiteSpace: "nowrap",
+                flexShrink: 0,
               }}
             >
               &lt;{node.entry.name}&gt;
