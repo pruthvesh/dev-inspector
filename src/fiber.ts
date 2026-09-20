@@ -427,18 +427,25 @@ export function buildRenderChain(el: Element): InspectedEntry[] {
   let current = fiber.return;
   let depth = 0;
   while (current && depth++ < MAX_RENDER_DEPTH) {
-    const name = renderAncestorName(current.type);
+    // A bailed-out subtree can leave `.return`/`.type` pointing at a stale
+    // alternate — the fiber React reused unchanged from a previous render,
+    // which may even have been a different component at that tree position.
+    // Resolve to the committed branch at each hop, same as the owner walk
+    // above does for `_debugOwner`, instead of trusting `.return` as-is.
+    const resolved = currentFiber(current);
+    if (!resolved) break;
+    const name = renderAncestorName(resolved.type);
     if (name) {
       entries.push({
         name,
-        identity: inspectionIdentity(current),
+        identity: inspectionIdentity(resolved),
         kind: "component",
-        stackFrames: getStackFrames(current),
-        props: current.memoizedProps,
-        location: debugSourceLocation(current._debugSource),
+        stackFrames: getStackFrames(resolved),
+        props: resolved.memoizedProps,
+        location: debugSourceLocation(resolved._debugSource),
       });
     }
-    current = current.return;
+    current = resolved.return;
   }
   return entries;
 }
