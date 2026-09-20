@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.1 — 2026-09-20
+
+- Add a source link to component tree rows: once a row's source location
+  resolves to app code, an "open in editor" icon appears next to it, using
+  the same resolver as the Source tab. Resolution is deferred per-row via
+  `IntersectionObserver` so it only runs for rows scrolled into view, and
+  library/generated components with no resolvable source get no icon.
+
 ## 0.6.0 — 2026-09-16
 
 - Add a searchable component browser with an owner tree, instance navigation,
