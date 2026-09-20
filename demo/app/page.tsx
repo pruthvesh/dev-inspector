@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { CartSummary } from "../components/CartSummary";
 import { Clock } from "../components/Clock";
 import { Hero } from "../components/Hero";
@@ -62,6 +63,16 @@ export default function Page() {
           </li>
         </ul>
       </section>
+      <p style={{ marginTop: 24 }}>
+        This page is intentionally shallow. For a deep, MUI-based hierarchy
+        (layout primitives that only render <code>{"{children}"}</code>,
+        memoized subtrees, several component layers per element) — the kind
+        that&apos;s hard to eyeball correctness on — see the{" "}
+        <Link href="/dashboard" style={{ color: "#a78bfa" }}>
+          complex dashboard demo
+        </Link>
+        .
+      </p>
     </main>
   );
 }
