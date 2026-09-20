@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.0 — 2026-09-20
+
+- Fix the Tree view to reflect actual component nesting instead of JSX
+  authorship: a component that only renders `{props.children}` (MUI's
+  `Grid`, `Box`, `Container`, most layout/provider wrappers) was being
+  flattened out, showing its children as siblings of its own parent.
+- Add an "Only app components" filter to the Tree view: hides components
+  whose source resolves to nothing app-owned (library/generated code),
+  reattaching their children to the nearest surviving ancestor.
+
 ## 0.6.1 — 2026-09-20
 
 - Add a source link to component tree rows: once a row's source location
