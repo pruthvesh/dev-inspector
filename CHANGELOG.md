@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.10.0 — 2026-09-20
+
+- Hovering a row in the Source tab now highlights that component's
+  rendered element on the page, matching the Tree view. Fixes
+  `nearestHostElement` returning nothing for MUI/Emotion-styled
+  components (AppBar, Toolbar, Paper, ...): Emotion's `styled()` renders
+  a real first child that produces no DOM output (a CSS side effect),
+  with the actual host element next to it as a sibling rather than a
+  descendant.
+
 ## 0.9.0 — 2026-09-20
 
 - Source and Props tabs now walk the real component ancestry (same as the
