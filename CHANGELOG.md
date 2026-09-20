@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.0 — 2026-09-20
+
+- Add hierarchy indentation to the Source tab: its ownership chain (host
+  element → owner → owner's owner → ... → outermost) was rendered as a
+  flat list with no indentation, even though each row is nested inside
+  the next.
+- Add an "Only app components" filter to the Source tab, matching the
+  Tree view's: hides entries resolved to nothing app-owned while keeping
+  still-resolving ones visible.
+
 ## 0.7.2 — 2026-09-20
 
 - Fix the Tree view's row indentation, which capped at 10 levels deep and
