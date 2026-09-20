@@ -42,7 +42,7 @@ Zero runtime dependencies. Never ships to production when gated correctly
 **Find the source**
 
 - Hover highlight with a `<Component> · file.tsx:42` chip and element dimensions
-- Click to lock the full owner-component chain, each entry with `file:line`
+- Click to lock the full component chain up to the app root, each entry with `file:line`
 - Click any entry to open that file in your editor at the exact line
 - Box-model overlay (margin/padding bands) like browser devtools
 
@@ -67,7 +67,7 @@ Zero runtime dependencies. Never ships to production when gated correctly
 **Work fast**
 
 - **Component browser** — search component names, step through matching
-  instances, and navigate a collapsible owner tree to select source and props
+  instances, and navigate a collapsible component tree to select source and props
 - **Dockable, resizable panel** — float beside the launcher or dock left/right;
   drag the panel edge to resize, with position and width saved locally
 
@@ -186,15 +186,20 @@ after inspecting an element. Search is case-insensitive; **Previous** and
 Hover a row to highlight its rendered element. Select a row to scroll to it,
 then open **Source** or **Props** to inspect that component.
 
-Expand/collapse rows to explore owners and their children. Focus a tree row
-and use Up/Down to navigate, Left/Right to collapse/expand, or Enter to select.
-Use **Refresh** after navigation, conditional rendering, or code edits.
+Expand/collapse rows to explore each component's real children. Focus a tree
+row and use Up/Down to navigate, Left/Right to collapse/expand, or Enter to
+select. Use **Refresh** after navigation, conditional rendering, or code edits.
 
-The tree represents the owner chains of components with DOM elements in the
-current document, including available Server Component debug metadata. It omits
-components with no rendered element, iframe contents, shadow-root contents,
-and the inspector's own UI. Large pages are capped at 5,000 DOM elements and
-1,000 component instances, with a visible truncation notice.
+The tree represents the actual render nesting of components with DOM elements
+in the current document (not JSX ownership — a component that only renders
+`{props.children}`, like a layout or provider wrapper, still shows up as a
+real ancestor of what it wraps), including available Server Component debug
+metadata. It omits components with no rendered element, iframe contents,
+shadow-root contents, and the inspector's own UI. Large pages are capped at
+5,000 DOM elements and 1,000 component instances, with a visible truncation
+notice. Check **Only app components** to hide components whose source resolves
+to nothing app-owned (library/generated code), reattaching their children to
+the nearest surviving ancestor.
 
 Use the **Panel** selector to float or dock left/right. Drag the outside edge
 (the left edge when docked right) to resize, or focus that edge and use

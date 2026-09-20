@@ -3,9 +3,9 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PropsPanel } from "../src/PropsPanel";
-import { buildInspectChain, type InspectedEntry } from "../src/fiber";
+import { buildRenderChain, type InspectedEntry } from "../src/fiber";
 
-vi.mock("../src/fiber", () => ({ buildInspectChain: vi.fn() }));
+vi.mock("../src/fiber", () => ({ buildRenderChain: vi.fn() }));
 let container: HTMLDivElement;
 let target: HTMLButtonElement;
 let root: Root;
@@ -19,7 +19,7 @@ beforeEach(() => {
   document.body.append(container, target);
   root = createRoot(container);
   entry = { name: "Counter", kind: "component", identity: {}, props: { quantity: 1 }, stackFrames: [] };
-  vi.mocked(buildInspectChain).mockImplementation(() => [entry]);
+  vi.mocked(buildRenderChain).mockImplementation(() => [entry]);
   act(() => root.render(createElement(PropsPanel, { el: target, index: 0 })));
 });
 afterEach(() => {
@@ -51,10 +51,10 @@ describe("live props panel", () => {
   });
   it("pauses polling and resumes from the last observation", () => {
     click("Pause");
-    const calls = vi.mocked(buildInspectChain).mock.calls.length;
+    const calls = vi.mocked(buildRenderChain).mock.calls.length;
     entry.props = { quantity: 5 };
     tick();
-    expect(buildInspectChain).toHaveBeenCalledTimes(calls);
+    expect(buildRenderChain).toHaveBeenCalledTimes(calls);
     expect(container.textContent).not.toContain("After: 5");
     click("Resume");
     expect(container.textContent).toContain("After: 5");

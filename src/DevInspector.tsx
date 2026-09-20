@@ -28,6 +28,7 @@ import {
   InspectedEntry,
   ResolverOptions,
   buildInspectChain,
+  buildRenderChain,
   openInEditor,
   resolveLocation,
 } from "./fiber";
@@ -458,7 +459,11 @@ function DevInspectorInner({
 
   const lockElement = useCallback(
     (el: Element, identity?: object) => {
-      const entries = buildInspectChain(el);
+      // The real render-tree ancestry (every actual parent component, not
+      // just who authored the JSX) — same as the Tree view, so Source/Props
+      // can jump to any layer between this element and the app root, not
+      // only the ones that happen to be JSX owners.
+      const entries = buildRenderChain(el);
       const text = el.textContent ?? "";
       const i18nSource = getI18nData?.() ?? null;
       const i18nMatches = i18nSource

@@ -43,8 +43,9 @@ export default function Page() {
           </li>
           <li>
             <b>Click</b> while inspecting to lock the panel: the Source tab
-            shows the owner chain (Page → ProductCard → button…); click a row
-            to open that file in your editor.
+            shows the full component chain up to the app root (Page →
+            ProductCard → button…); click a row to open that file in your
+            editor.
           </li>
           <li>
             Lock the &quot;Add to cart&quot; button text and check the

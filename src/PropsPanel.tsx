@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { buildInspectChain } from "./fiber";
+import { buildRenderChain } from "./fiber";
 import { JsonTree } from "./JsonTree";
 import { diffProps, snapshotProps, type PropChange, type PropsSnapshot } from "./propsChanges";
 
@@ -33,7 +33,11 @@ export function PropsPanel({ el, index }: { el: Element; index: number }) {
         return;
       }
       try {
-        const entry = buildInspectChain(el)[index];
+        // Must use the same chain-building function as lockElement's
+        // `entries` in DevInspector.tsx — `index` is a position in that
+        // array, and a mismatched function would point it at the wrong
+        // component.
+        const entry = buildRenderChain(el)[index];
         if (!entry) {
           setStatus("Component unavailable. Inspect the element again.");
           return;
