@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.0 — 2026-09-20
+
+- Source and Props tabs now walk the real component ancestry (same as the
+  Tree view) instead of the JSX-ownership chain, which skipped any
+  component that only renders `{props.children}` — layout and provider
+  wrappers especially. The Source tab could previously show as few as 3
+  entries for an element where the real chain has 8+.
+
 ## 0.8.0 — 2026-09-20
 
 - Add hierarchy indentation to the Source tab: its ownership chain (host
