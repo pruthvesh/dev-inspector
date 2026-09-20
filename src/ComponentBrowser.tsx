@@ -1,10 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
-import { buildInspectChain } from "./fiber";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  buildInspectChain,
+  openInEditor,
+  resolveLocation,
+  type ResolvedLocation,
+  type ResolverOptions,
+} from "./fiber";
 import {
   flattenComponents,
   scanComponents,
   type ComponentNode,
 } from "./componentTree";
+import { ExternalLinkIcon } from "./icons";
 
 const controlStyle = {
   background: "#27272a",
@@ -15,12 +22,25 @@ const controlStyle = {
   font: "inherit",
 };
 
+const sourceLinkStyle: React.CSSProperties = {
+  background: "none",
+  border: "none",
+  color: "#52525b",
+  cursor: "pointer",
+  padding: 2,
+  display: "flex",
+  flexShrink: 0,
+  marginLeft: "auto",
+};
+
 export function ComponentBrowser({
   onSelect,
   onPreview,
+  resolverOptions,
 }: {
   onSelect: (node: ComponentNode) => void;
   onPreview: (node: ComponentNode | null) => void;
+  resolverOptions: ResolverOptions;
 }) {
   const [tree, setTree] = useState(() => scanComponents(document.body));
   const [query, setQuery] = useState("");
@@ -28,6 +48,48 @@ export function ComponentBrowser({
   const [selected, setSelected] = useState<object | null>(null);
   const [message, setMessage] = useState("");
   useEffect(() => () => onPreview(null), []);
+
+  // Resolving a source location can mean a network round-trip, and the tree
+  // can hold hundreds of nodes — so the link only appears once a row has
+  // scrolled into view and its location came back non-null (found).
+  const [locations, setLocations] = useState<Map<object, ResolvedLocation | null>>(new Map());
+  const startedRef = useRef<Set<object>>(new Set());
+  const nodeByElRef = useRef<Map<Element, ComponentNode>>(new Map());
+  const resolverOptionsRef = useRef(resolverOptions);
+  resolverOptionsRef.current = resolverOptions;
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  if (!observerRef.current && typeof IntersectionObserver !== "undefined") {
+    observerRef.current = new IntersectionObserver(
+      (observedEntries) => {
+        for (const observedEntry of observedEntries) {
+          if (!observedEntry.isIntersecting) continue;
+          const target = observedEntry.target;
+          observerRef.current?.unobserve(target);
+          const node = nodeByElRef.current.get(target);
+          if (!node || startedRef.current.has(node.identity)) continue;
+          startedRef.current.add(node.identity);
+          resolveLocation(node.entry.stackFrames, resolverOptionsRef.current).then(
+            (location) => {
+              setLocations((prev) => new Map(prev).set(node.identity, location));
+            },
+          );
+        }
+      },
+      { rootMargin: "200px" },
+    );
+  }
+  useEffect(() => () => observerRef.current?.disconnect(), []);
+  const rowRef = (node: ComponentNode) => (el: HTMLDivElement | null) => {
+    const observer = observerRef.current;
+    if (!el || !observer) return;
+    nodeByElRef.current.set(el, node);
+    if (
+      node.entry.stackFrames.length > 0 &&
+      !startedRef.current.has(node.identity)
+    ) {
+      observer.observe(el);
+    }
+  };
   const all = useMemo(() => flattenComponents(tree.roots), [tree]);
   const matches = useMemo(
     () =>
@@ -103,6 +165,9 @@ export function ComponentBrowser({
             setTree(scanComponents(document.body));
             setMessage("");
             onPreview(null);
+            startedRef.current = new Set();
+            nodeByElRef.current = new Map();
+            setLocations(new Map());
           }}
         >
           Refresh
@@ -166,6 +231,7 @@ export function ComponentBrowser({
         {rows.map(({ node, depth }, index) => (
           <div
             key={all.indexOf(node)}
+            ref={rowRef(node)}
             role="treeitem"
             aria-level={depth + 1}
             aria-selected={selected === node.identity}
@@ -245,6 +311,21 @@ export function ComponentBrowser({
             >
               &lt;{node.entry.name}&gt;
             </button>
+            {locations.get(node.identity) && (
+              <button
+                type="button"
+                aria-label={`Open source of ${node.entry.name}`}
+                title="Open in editor"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  const location = locations.get(node.identity);
+                  if (location) openInEditor(location, resolverOptions);
+                }}
+                style={sourceLinkStyle}
+              >
+                <ExternalLinkIcon size={12} />
+              </button>
+            )}
           </div>
         ))}
       </div>

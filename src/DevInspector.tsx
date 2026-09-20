@@ -857,7 +857,8 @@ function DevInspectorInner({
               }}
               onPreview={node => setPreview(node && node.element.isConnected ? {
                 el: node.element, rect: node.element.getBoundingClientRect(), box: getBoxModel(node.element), name: node.entry.name, locationLabel: null,
-              } : null)} />}
+              } : null)}
+              resolverOptions={resolverOptions} />}
             {locked && <>
             {tab === "source" && (
               <>
