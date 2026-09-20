@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.1 — 2026-09-20
+
+- Fix the Tree view's render-chain walk to resolve every ancestor through
+  React's committed branch, matching the existing owner-chain walk. A
+  bailed-out subtree could otherwise leave `.return`/`.type` pointing at a
+  stale fiber from a previous render.
+
 ## 0.7.0 — 2026-09-20
 
 - Fix the Tree view to reflect actual component nesting instead of JSX
